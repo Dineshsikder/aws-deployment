@@ -314,10 +314,10 @@ jobs:
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/propertystore:${{ vars.RELEASE_VERSION }} .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/your-repo:${{ vars.RELEASE_VERSION }} .
 
       - name: Push Docker image to Docker Hub
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/propertystore:${{ vars.RELEASE_VERSION }}
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/your-repo:${{ vars.RELEASE_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -492,14 +492,14 @@ jobs:
           echo "Navigating to the application directory"
           cd /home/ubuntu/folder
           echo "Checking for the repository"
-          if [ -d "jps-adonis" ]; then
+          if [ -d "your-app" ]; then
             echo "Repository found. Pulling the latest changes."
-            cd jps-adonis
+            cd your-app
             git pull origin master
           else
             echo "Repository not found. Cloning the repository."
-            git clone https://${{ secrets.GH_PAT }}@github.com/user-name/your-repo.git jps-adonis
-            cd jps-adonis
+            git clone https://${{ secrets.GH_PAT }}@github.com/user-name/your-repo.git your-app
+            cd your-app
           fi
           # echo "Moving the env file to the application directory"
           mv /home/ubuntu/folder/your-app/production.env .env
