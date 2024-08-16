@@ -314,10 +314,10 @@ jobs:
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/propertystore:${{ vars.RELEASE_VERSION }} .
+        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/your-repo:${{ vars.RELEASE_VERSION }} .
 
       - name: Push Docker image to Docker Hub
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/propertystore:${{ vars.RELEASE_VERSION }}
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/your-repo:${{ vars.RELEASE_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
