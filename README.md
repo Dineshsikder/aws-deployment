@@ -236,12 +236,32 @@ This GitHub Action automates the process of deploying a Java Spring Boot applica
 4. **Log in to Docker Hub**: The workflow logs into Docker Hub using the credentials stored in GitHub Secrets.
 
 5. **Build Docker Image**: It builds a Docker image for the application using the Dockerfile in the repository. The image is tagged with the release version specified in the workflow variables.
+   ## Dockerfile
+```
+# Use an official base image
+FROM openjdk:11-jdk-slim
 
-6. **Push Docker Image to Docker Hub**: The Docker image is pushed to Docker Hub, making it available for deployment.
+# Install tini
+RUN apt-get update && apt-get install -y tini
 
-7. **Configure AWS Credentials**: AWS credentials are configured to allow the workflow to interact with AWS services.
+# Set the working directory in the container
+WORKDIR /yourApp
 
-8. **Update ECS Service**: The workflow updates the ECS service with the new Docker image, forces a new deployment, and enables deployment circuit breakers for rollback in case of deployment failure.
+# Copy the jar file to the container
+COPY target/yourApp-0.0.1-SNAPSHOT.jar yourApp.jar
+
+# Expose the port your application will run on
+EXPOSE 5000
+
+# Set tini as entrypoint
+ENTRYPOINT ["/usr/bin/tini", "--", "java", "-jar", "yourApp.jar"]
+```
+
+7. **Push Docker Image to Docker Hub**: The Docker image is pushed to Docker Hub, making it available for deployment.
+
+8. **Configure AWS Credentials**: AWS credentials are configured to allow the workflow to interact with AWS services.
+
+9. **Update ECS Service**: The workflow updates the ECS service with the new Docker image, forces a new deployment, and enables deployment circuit breakers for rollback in case of deployment failure.
 
 ## Prerequisites
 
@@ -382,6 +402,123 @@ This GitHub Action automates the deployment of a Node.js application to an AWS E
 ## Running the Workflow
 
 This workflow runs automatically when a push is made to the `master` branch. The workflow will connect to the EC2 instance, deploy the latest code, and start the application using PM2.
+
+```
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build the project
+      run: npm run build
+
+    - name: Create env file
+      run: |
+        echo PORT=${{ secrets.PORT }} >> production.env
+        echo HOST=${{ secrets.HOST }} >> production.env
+        echo NODE_ENV=production >> production.env
+        echo APP_KEY=${{ secrets.APP_KEY }} >> production.env
+        echo APP_VER=${{ secrets.APP_VER }} >> production.env
+        echo DRIVE_DISK=${{ secrets.DRIVE_DISK }} >> production.env
+        echo DB_CONNECTION=${{ secrets.DB_CONNECTION }} >> production.env
+        echo MYSQL_HOST=${{ secrets.MYSQL_HOST }} >> production.env
+        echo MYSQL_PORT=${{ secrets.MYSQL_PORT }} >> production.env
+        echo MYSQL_USER=${{ secrets.MYSQL_USER }} >> production.env
+        echo MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }} >> production.env
+        echo MYSQL_DB_NAME=${{ secrets.MYSQL_DB_NAME }} >> production.env
+        echo -e "JWT_PRIVATE_KEY=\"${{ secrets.JWT_PRIVATE_KEY }}\"" >> production.env
+        echo -e "JWT_PUBLIC_KEY=\"${{ secrets.JWT_PUBLIC_KEY }}\"" >> production.env
+        cat production.env  # Print the file content for debugging purposes
+      env:
+        PORT: ${{ secrets.PORT }}
+        HOST: ${{ secrets.HOST }}
+        NODE_ENV: "production"
+        APP_KEY: ${{ secrets.APP_KEY }}
+        APP_VER: ${{ secrets.APP_VER }}
+        DRIVE_DISK: ${{ secrets.DRIVE_DISK }}
+        DB_CONNECTION: ${{ secrets.DB_CONNECTION }}
+        MYSQL_HOST: ${{ secrets.MYSQL_HOST }}
+        MYSQL_PORT: ${{ secrets.MYSQL_PORT }}
+        MYSQL_USER: ${{ secrets.MYSQL_USER }}
+        MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        MYSQL_DB_NAME: ${{ secrets.MYSQL_DB_NAME }}
+        JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY }}
+        JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY }}
+
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ vars.EC2_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Test SSH Connection
+      run: |
+        ssh -i ~/.ssh/id_rsa ${{ vars.EC2_USER }}@${{ vars.EC2_HOST }} "echo SSH connection test successful"
+
+    - name: Transfer env file to EC2
+      run: |
+        scp -i ~/.ssh/id_rsa production.env ${{ vars.EC2_USER }}@${{ vars.EC2_HOST }}:/home/ubuntu/folder/your-app/production.env
+
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          set -e  # Exit on any error
+          set -x  # Print each command before executing it
+          echo "Stopping and deleting all existing PM2 processes"
+          pm2 delete all || true  # Ensure any previous PM2 processes are stopped and deleted
+          echo "Navigating to the application directory"
+          cd /home/ubuntu/folder
+          echo "Checking for the repository"
+          if [ -d "jps-adonis" ]; then
+            echo "Repository found. Pulling the latest changes."
+            cd jps-adonis
+            git pull origin master
+          else
+            echo "Repository not found. Cloning the repository."
+            git clone https://${{ secrets.GH_PAT }}@github.com/user-name/your-repo.git jps-adonis
+            cd jps-adonis
+          fi
+          # echo "Moving the env file to the application directory"
+          mv /home/ubuntu/folder/your-app/production.env .env
+          echo "Installing dependencies"
+          npm install
+          echo "Building the project"
+          npm run build
+          echo "Managing the application process with PM2"
+          pm2 start build/server.js --name your-app
+    - name: Check PM2 Status
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ vars.EC2_HOST }}
+        username: ${{ vars.EC2_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+            pm2 describe your-app
+
+```
 
 ## License
 
